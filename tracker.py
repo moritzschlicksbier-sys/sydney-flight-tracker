@@ -3,84 +3,82 @@ import requests
 from datetime import datetime
 import pandas as pd
 
-# 1. API Setup
-API_KEY = os.getenv("SERPAPI_API_KEY")
+# 1. API Setup & Schutz gegen Leerzeichen
+RAW_KEY = os.getenv("SERPAPI_API_KEY")
+API_KEY = RAW_KEY.strip() if RAW_KEY else None
 URL = "https://serpapi.com/search.json"
 
 if not API_KEY:
-    print("Fehler: Kein SERPAPI_API_KEY gefunden!")
+    print("❌ FEHLER: Kein SERPAPI_API_KEY in den GitHub Secrets gefunden!")
     exit(1)
 
-# Basis-Parameter
+# Basis-Parameter mit deinen neu entdeckten Filtern!
 base_params = {
     "engine": "google_flights",
     "departure_id": "HAM",
     "arrival_id": "SYD",
     "outbound_date": "2027-01-12",
-    "travel_class": "ECONOMY",
+    "travel_class": 1,  # 1 = Economy
+    "stops": 2,         # 🚀 NEU: Strikt maximal 1 Zwischenstopp (aus Doku)
+    "sort_by": 2,       # 🚀 NEU: Strikt nach Preis sortieren (aus Doku)
     "currency": "EUR",
     "hl": "de",
     "gl": "de",
     "api_key": API_KEY
 }
 
-def flugdaten_auswerten(data):
+def flugdaten_auswerten(data, info_label):
+    if "error" in data:
+        print(f"❌ SerpAPI Fehler bei {info_label}: {data['error']}")
+        return "API-Fehler", "API-Fehler", "API-Fehler"
+
     preis_markt = "Kein Flug (max. 1 Stopp)"
     preis_emirates = "Kein Flug (max. 1 Stopp)"
     preis_qatar = "Kein Flug (max. 1 Stopp)"
 
-    # Kombiniere alle Flüge, die Google Flights zurückgibt
+    # Da wir sort_by=2 nutzen, ist diese Liste schon perfekt vom günstigsten zum teuersten Flug sortiert!
     alle_flüge = data.get("best_flights", []) + data.get("other_flights", [])
     
-    # 1. Günstigster Markt-Preis generell mit max. 1 Stopp
-    for flug in alle_flüge:
-        legs = flug.get("legs", [])
-        # Prüfen, ob irgendein Teil der Reise mehr als 1 Stopp hat
-        max_stops = max([leg.get("stops", 0) for leg in legs]) if legs else 0
-        
-        if max_stops <= 1:
-            if "price" in flug:
-                preis_markt = f"{flug['price']} €" if isinstance(flug['price'], int) else flug['price']
-                break
+    if alle_flüge:
+        # Der allererste Flug ist automatisch der absolut günstigste auf dem Markt mit max 1 Stopp
+        erster_preis = alle_flüge[0].get("price")
+        if erster_preis:
+            preis_markt = f"{erster_preis} €" if isinstance(erster_preis, int) else erster_preis
 
-    # 2. Gezielt nach Emirates & Qatar suchen
-    for flug in alle_flüge:
-        legs = flug.get("legs", [])
-        max_stops = max([leg.get("stops", 0) for leg in legs]) if legs else 0
-        
-        if max_stops <= 1:
+        # Jetzt gehen wir die sortierte Liste durch, um Emirates & Qatar abzugreifen
+        for flug in alle_flüge:
             current_price = flug.get("price", "N/A")
             if current_price == "N/A":
                 continue
-                
-            # Textsuche über alle Flugsegmente hinweg
+            
+            # Formatieren, falls es eine reine Zahl ist
+            formatted_price = f"{current_price} €" if isinstance(current_price, int) else current_price
             flug_info_text = str(flug).lower()
             
-            # Emirates Check (Sucht nach 'emirates' oder dem Airline-Code 'ek')
+            # Da die Liste nach Preis sortiert ist, ist der ERSTE Treffer automatisch der günstigste für die jeweilige Airline
             if ("emirates" in flug_info_text or "'ek'" in flug_info_text) and preis_emirates == "Kein Flug (max. 1 Stopp)":
-                preis_emirates = f"{current_price} €" if isinstance(current_price, int) else current_price
+                preis_emirates = formatted_price
             
-            # Qatar Check (Sucht nach 'qatar' oder dem Airline-Code 'qr')
             if ("qatar" in flug_info_text or "'qr'" in flug_info_text) and preis_qatar == "Kein Flug (max. 1 Stopp)":
-                preis_qatar = f"{current_price} €" if isinstance(current_price, int) else current_price
-                    
+                preis_qatar = formatted_price
+                                
     return preis_markt, preis_emirates, preis_qatar
 
 try:
     # --- ABFRAGE 1: Nur Hinflug (One-Way) ---
-    print("Frage One-Way Flüge an...")
+    print("🛫 Starte Abfrage für One-Way Flüge...")
     params_ow = base_params.copy()
-    params_ow["type"] = "2"
+    params_ow["type"] = 2  # 2 = One-Way
     response_ow = requests.get(URL, params=params_ow)
-    ow_markt, ow_emirates, ow_qatar = flugdaten_auswerten(response_ow.json())
+    ow_markt, ow_emirates, ow_qatar = flugdaten_auswerten(response_ow.json(), "One-Way")
 
     # --- ABFRAGE 2: Hin- und Rückflug (Round-Trip) ---
-    print("Frage Round-Trip Flüge an...")
+    print("🛬 Starte Abfrage für Round-Trip Flüge...")
     params_rt = base_params.copy()
-    params_rt["type"] = "1"
+    params_rt["type"] = 1  # 1 = Round-Trip
     params_rt["return_date"] = "2027-05-11"
     response_rt = requests.get(URL, params=params_rt)
-    rt_markt, rt_emirates, rt_qatar = flugdaten_auswerten(response_rt.json())
+    rt_markt, rt_emirates, rt_qatar = flugdaten_auswerten(response_rt.json(), "Round-Trip")
 
     # --- DATEN SPEICHERN ---
     now = datetime.now()
@@ -105,7 +103,7 @@ try:
     file_exists = os.path.exists(csv_file)
     df.to_csv(csv_file, mode='a', header=not file_exists, index=False)
     
-    print("Preise erfolgreich aktualisiert!")
+    print("✅ CSV-Datei erfolgreich mit echten Daten aktualisiert!")
 
 except Exception as e:
-    print(f"Ein Fehler ist aufgetreten: {e}")
+    print(f"❌ Fehler: {e}")
