@@ -1,0 +1,36 @@
+name: Flugpreis Tracker
+
+on:
+  schedule:
+    - cron: '0 2,15 * * *'  # Jeden Tag um 02:00 und 15:00 Uhr UTC
+  workflow_dispatch:        # Erlaubt es, den Tracker manuell per Klick zu starten
+
+jobs:
+  run-tracker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # Gibt GitHub die Erlaubnis, die CSV zu speichern
+
+    steps:
+    - name: Code auschecken
+      uses: actions/checkout@v4
+
+    - name: Python einrichten
+      uses: actions/setup-python@v5
+      with:
+        python-node-version: '3.10'
+
+    - name: Abhängigkeiten installieren
+      run: pip install requests pandas
+
+    - name: Skript ausführen
+      env:
+        SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+      run: python tracker.py
+
+    - name: Ergebnisse speichern
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add flugpreise_sydney.csv
+        git diff --quiet && git diff --staged --quiet || (git commit -m "Flugpreise aktualisiert: $(date +'%Y-%m-%d %H:%M:%S')" && git push)
