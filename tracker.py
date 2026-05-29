@@ -11,12 +11,12 @@ if not API_KEY:
     print("Fehler: Kein SERPAPI_API_KEY gefunden!")
     exit(1)
 
-# Basis-Parameter (Gilt für beide Abfragen)
+# Basis-Parameter
 base_params = {
     "engine": "google_flights",
     "departure_id": "HAM",
     "arrival_id": "SYD",
-    "outbound_date": "2027-01-12", # Auf 2027 korrigiert
+    "outbound_date": "2027-01-12",
     "travel_class": "ECONOMY",
     "currency": "EUR",
     "hl": "de",
@@ -25,48 +25,62 @@ base_params = {
 }
 
 def flugdaten_auswerten(data):
-    """Hilfsfunktion, um die Preise für Markt, Emirates und Qatar mit max. 1 Stopp zu filtern"""
+    """Filtert die Flüge flexibler und sicherer nach der Anzahl der echten Flugsegmente"""
     preis_markt = "Kein Flug (max. 1 Stopp)"
     preis_emirates = "Kein Flug (max. 1 Stopp)"
     preis_qatar = "Kein Flug (max. 1 Stopp)"
 
+    # Google Flights liefert Ergebnisse in 'best_flights' und 'other_flights'
     alle_flüge = data.get("best_flights", []) + data.get("other_flights", [])
     
     # 1. Günstigster Markt-Preis mit max. 1 Stopp
     for flug in alle_flüge:
-        legs = flug.get("legs", [])
-        max_stops = max([leg.get("stops", 0) for leg in legs]) if legs else 0
-        if max_stops <= 1:
+        flüge_liste = flug.get("flights", [])
+        
+        # Ein Hinflug mit 1 Stopp besteht aus genau 2 Flugsegmenten
+        # Bei Round-Trips liefert SerpApi oft den Gesamtpreis, wir prüfen hier die Segmente der ersten Hälfte
+        if len(flüge_liste) <= 2:
             preis_markt = flug.get("price", "N/A")
             break
 
-    # 2. Emirates & Qatar mit max. 1 Stopp
+    # 2. Gezielt nach Emirates & Qatar suchen
     for flug in alle_flüge:
-        legs = flug.get("legs", [])
-        max_stops = max([leg.get("stops", 0) for leg in legs]) if legs else 0
+        flüge_liste = flug.get("flights", [])
+        ticket_preis = flug.get("price", "N/A")
         
-        if max_stops <= 1:
-            ticket_preis = flug.get("price", "N/A")
-            for segment in flug.get("flights", []):
-                airline_name = segment.get("airline", "").lower()
-                if "emirates" in airline_name and preis_emirates == "Kein Flug (max. 1 Stopp)":
-                    preis_emirates = ticket_preis
-                if "qatar" in airline_name and preis_qatar == "Kein Flug (max. 1 Stopp)":
-                    preis_qatar = ticket_preis
+        # Finde heraus, welche Airlines an diesem gesamten Flug beteiligt sind
+        beteiligte_airlines = [f.get("airline", "").lower() for f in flüge_liste]
+        
+        # Wir filtern alle Flüge raus, die insgesamt mehr als 2 Segmente für den Hinflug haben (sprich > 1 Stopp)
+        # Da SerpApi bei Roundtrips manchmal alle Segmente (Hin + Rück) in eine Liste wirft, 
+        # prüfen wir hier flexibel, ob Emirates oder Qatar das Hauptsegment fliegt
+        ist_emirates = any("emirates" in a for a in beteilte_airlines)
+        ist_qatar = any("qatar" in a for a in beteilte_airlines)
+        
+        # Zähle die Stopps anhand der Segmente
+        # Wenn es ein reiner Hinflug ist, darf die Liste max. 2 Elemente haben. 
+        # Wenn es ein Roundtrip ist, hat sie oft max. 4 Elemente (2 hin, 2 zurück).
+        anzahl_segmente = len(flüge_liste)
+        
+        if anzahl_segmente <= 4:  # Schließt Flüge mit 2 oder mehr Stopps pro Richtung aus
+            if ist_emirates and preis_emirates == "Kein Flug (max. 1 Stopp)":
+                preis_emirates = ticket_preis
+            if ist_qatar and preis_qatar == "Kein Flug (max. 1 Stopp)":
+                preis_qatar = ticket_preis
                     
     return preis_markt, preis_emirates, preis_qatar
 
 try:
-    # --- ABFRAGE 1: Nur Hinflug (One-Way) ---
+    # --- ABFRAGE 1: Nur Hinflug ---
     print("Frage One-Way Flüge an...")
     params_ow = base_params.copy()
     response_ow = requests.get(URL, params=params_ow)
     ow_markt, ow_emirates, ow_qatar = flugdaten_auswerten(response_ow.json())
 
-    # --- ABFRAGE 2: Hin- und Rückflug (Round-Trip) ---
+    # --- ABFRAGE 2: Hin- und Rückflug ---
     print("Frage Round-Trip Flüge an...")
     params_rt = base_params.copy()
-    params_rt["return_date"] = "2027-05-11" # Dein Rückflugdatum
+    params_rt["return_date"] = "2027-05-11"
     response_rt = requests.get(URL, params=params_rt)
     rt_markt, rt_emirates, rt_qatar = flugdaten_auswerten(response_rt.json())
 
@@ -77,7 +91,6 @@ try:
 
     csv_file = "flugpreise_sydney.csv"
     
-    # Alle 6 Preise in eine strukturierte Zeile packen
     neue_daten = [[
         zeitpunkt, wochentag, 
         ow_markt, ow_emirates, ow_qatar, 
@@ -94,7 +107,7 @@ try:
     file_exists = os.path.exists(csv_file)
     df.to_csv(csv_file, mode='a', header=not file_exists, index=False)
     
-    print(f"Erfolgreich alle 6 Preise geloggt für {zeitpunkt} ({wochentag})!")
+    print("Preise erfolgreich aktualisiert!")
 
 except Exception as e:
     print(f"Ein Fehler ist aufgetreten: {e}")
