@@ -25,44 +25,44 @@ base_params = {
 }
 
 def flugdaten_auswerten(data):
-    """Filtert die Flüge flexibler und sicherer nach der Anzahl der echten Flugsegmente"""
     preis_markt = "Kein Flug (max. 1 Stopp)"
     preis_emirates = "Kein Flug (max. 1 Stopp)"
     preis_qatar = "Kein Flug (max. 1 Stopp)"
 
+    # Kombiniere alle Flüge, die Google Flights zurückgibt
     alle_flüge = data.get("best_flights", []) + data.get("other_flights", [])
     
-    # 1. Günstigster Markt-Preis mit max. 1 Stopp
+    # 1. Günstigster Markt-Preis generell mit max. 1 Stopp
     for flug in alle_flüge:
-        flüge_liste = flug.get("flights", [])
-        # Bei Hinflug (OW) max 2 Segmente, bei Round-Trip (RT) sind oft Hin- und Rückflug zusammen in der Liste
-        if len(flüge_liste) <= 4:
-            # Wir prüfen kurz, ob pro Richtung maximal ein Zwischenstopp drin ist
-            # SerpApi liefert bei 'legs' oft die genaue Stopp-Anzahl pro Richtung
-            legs = flug.get("legs", [])
-            max_stops = max([leg.get("stops", 0) for leg in legs]) if legs else 0
-            
-            if max_stops <= 1:
-                preis_markt = flug.get("price", "N/A")
+        legs = flug.get("legs", [])
+        # Prüfen, ob irgendein Teil der Reise mehr als 1 Stopp hat
+        max_stops = max([leg.get("stops", 0) for leg in legs]) if legs else 0
+        
+        if max_stops <= 1:
+            if "price" in flug:
+                preis_markt = f"{flug['price']} €" if isinstance(flug['price'], int) else flug['price']
                 break
 
     # 2. Gezielt nach Emirates & Qatar suchen
     for flug in alle_flüge:
-        flüge_liste = flug.get("flights", [])
-        ticket_preis = flug.get("price", "N/A")
-        
         legs = flug.get("legs", [])
         max_stops = max([leg.get("stops", 0) for leg in legs]) if legs else 0
         
         if max_stops <= 1:
-            beteiligte_airlines = [f.get("airline", "").lower() for f in flüge_liste]
-            ist_emirates = any("emirates" in a for a in beteiligte_airlines)
-            ist_qatar = any("qatar" in a for a in beteiligte_airlines)
+            current_price = flug.get("price", "N/A")
+            if current_price == "N/A":
+                continue
+                
+            # Textsuche über alle Flugsegmente hinweg
+            flug_info_text = str(flug).lower()
             
-            if ist_emirates and preis_emirates == "Kein Flug (max. 1 Stopp)":
-                preis_emirates = ticket_preis
-            if ist_qatar and preis_qatar == "Kein Flug (max. 1 Stopp)":
-                preis_qatar = ticket_preis
+            # Emirates Check (Sucht nach 'emirates' oder dem Airline-Code 'ek')
+            if ("emirates" in flug_info_text or "'ek'" in flug_info_text) and preis_emirates == "Kein Flug (max. 1 Stopp)":
+                preis_emirates = f"{current_price} €" if isinstance(current_price, int) else current_price
+            
+            # Qatar Check (Sucht nach 'qatar' oder dem Airline-Code 'qr')
+            if ("qatar" in flug_info_text or "'qr'" in flug_info_text) and preis_qatar == "Kein Flug (max. 1 Stopp)":
+                preis_qatar = f"{current_price} €" if isinstance(current_price, int) else current_price
                     
     return preis_markt, preis_emirates, preis_qatar
 
@@ -70,14 +70,14 @@ try:
     # --- ABFRAGE 1: Nur Hinflug (One-Way) ---
     print("Frage One-Way Flüge an...")
     params_ow = base_params.copy()
-    params_ow["type"] = "2"  # STRIKT: 2 bedeutet "One-Way" bei SerpApi!
+    params_ow["type"] = "2"
     response_ow = requests.get(URL, params=params_ow)
     ow_markt, ow_emirates, ow_qatar = flugdaten_auswerten(response_ow.json())
 
     # --- ABFRAGE 2: Hin- und Rückflug (Round-Trip) ---
     print("Frage Round-Trip Flüge an...")
     params_rt = base_params.copy()
-    params_rt["type"] = "1"  # STRIKT: 1 bedeutet "Round-Trip" bei SerpApi!
+    params_rt["type"] = "1"
     params_rt["return_date"] = "2027-05-11"
     response_rt = requests.get(URL, params=params_rt)
     rt_markt, rt_emirates, rt_qatar = flugdaten_auswerten(response_rt.json())
