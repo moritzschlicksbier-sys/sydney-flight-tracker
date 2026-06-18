@@ -91,11 +91,11 @@ roundtrip_data = fetch_flights(roundtrip_params)
 # 3. Günstigste Preise extrahieren (wenigste Stopps -> günstigster Preis)
 oneway_markt = extract_best_price(oneway_data)
 oneway_emirates = extract_best_price(oneway_data, "Emirates")
-oneway_qatar = extract_best_price(oneway_data, "Qatar Airways")
+oneway_qatar = extract_best_price(oneway_data, "Qatar")
 
 roundtrip_markt = extract_best_price(roundtrip_data)
 roundtrip_emirates = extract_best_price(roundtrip_data, "Emirates")
-roundtrip_qatar = extract_best_price(roundtrip_data, "Qatar Airways")
+roundtrip_qatar = extract_best_price(roundtrip_data, "Qatar")
 
 # 4. Zeitstempel und Wochentag erstellen
 now = datetime.now()
