@@ -19,16 +19,35 @@ if os.path.exists(csv_file):
     letztes_update = df["Zeitpunkt"].iloc[-1]
     st.success(f"🔄 Letztes Update der Daten: {letztes_update}")
     
+    # Letzte Zeile für Metriken extrahieren
+    letzte_zeile = df.iloc[-1]
+    
+    # Hinflug Airline bestimmen
+    ow_markt = letzte_zeile["Hinflug_Günstigster_Markt"]
+    if ow_markt == letzte_zeile["Hinflug_Emirates"]:
+        ow_airline = "Airline: Emirates"
+    elif ow_markt == letzte_zeile["Hinflug_Qatar"]:
+        ow_airline = "Airline: Qatar Airways"
+    else:
+        ow_airline = "Airline: Andere Airline"
+
+    # Hin- & Rückflug Airline bestimmen
+    rt_markt = letzte_zeile["HinRück_Günstigster_Markt"]
+    if rt_markt == letzte_zeile["HinRück_Emirates"]:
+        rt_airline = "Airline: Emirates"
+    elif rt_markt == letzte_zeile["HinRück_Qatar"]:
+        rt_airline = "Airline: Qatar Airways"
+    else:
+        rt_airline = "Airline: Andere Airline"
+        
     # --- METRIKEN (Kacheln) ---
     st.subheader("📊 Aktuelle Preislage")
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     
     with col1:
-        st.metric(label="Günstigster Hinflug (Markt)", value=df["Hinflug_Günstigster_Markt"].iloc[-1])
+        st.metric(label="Günstigster Hinflug im Ganzen Markt", value=ow_markt, delta=ow_airline, delta_color="off")
     with col2:
-        st.metric(label="Hin- & Rückflug (Emirates)", value=df["HinRück_Emirates"].iloc[-1])
-    with col3:
-        st.metric(label="Hin- & Rückflug (Qatar)", value=df["HinRück_Qatar"].iloc[-1])
+        st.metric(label="Günstigster Hin- und Rückflug Markt", value=rt_markt, delta=rt_airline, delta_color="off")
         
     st.markdown("---")
     
@@ -39,6 +58,15 @@ if os.path.exists(csv_file):
         df[col + "_clean"] = df[col].astype(str).str.replace(" €", "", regex=False).str.replace(".", "", regex=False).str.strip()
         df[col + "_clean"] = pd.to_numeric(df[col + "_clean"], errors='coerce')
 
+    color_map = {
+        "Hinflug_Günstigster_Markt_clean": "#00CC00",  # Deutliches Grün
+        "Hinflug_Emirates_clean": "#D71921",           # Emirates Rot
+        "Hinflug_Qatar_clean": "#FF6666",              # Helles Rot für Qatar
+        "HinRück_Günstigster_Markt_clean": "#00CC00",
+        "HinRück_Emirates_clean": "#D71921",
+        "HinRück_Qatar_clean": "#FF6666"
+    }
+
     # Spalten aufteilen für zwei nebeneinanderliegende Graphen
     graph_col1, graph_col2 = st.columns(2)
     
@@ -48,8 +76,22 @@ if os.path.exists(csv_file):
         df_ow = df.dropna(subset=["Hinflug_Günstigster_Markt_clean"])
         if not df_ow.empty:
             fig_ow = px.line(df_ow, x="Zeitpunkt", y=["Hinflug_Günstigster_Markt_clean", "Hinflug_Emirates_clean", "Hinflug_Qatar_clean"],
-                             labels={"value": "Preis in EUR", "Zeitpunkt": "Abfrage-Zeit"},
+                             labels={"value": "Preis in EUR", "Zeitpunkt": "Abfrage-Zeit", "variable": "Airline"},
+                             color_discrete_map=color_map,
                              title="Hinflug (12.01.2027)")
+            
+            # Linien etwas dicker machen für modernen Look
+            fig_ow.update_traces(line=dict(width=4))
+            
+            # Mittelgroße Linie rechts für aktuelle Preise von Emirates und Qatar
+            last_ek_ow = df_ow["Hinflug_Emirates_clean"].dropna().iloc[-1] if not df_ow["Hinflug_Emirates_clean"].dropna().empty else None
+            last_qr_ow = df_ow["Hinflug_Qatar_clean"].dropna().iloc[-1] if not df_ow["Hinflug_Qatar_clean"].dropna().empty else None
+            
+            if last_ek_ow is not None:
+                fig_ow.add_hline(y=last_ek_ow, line_dash="dot", line_width=2, line_color="#D71921", annotation_text="Emirates Aktuell", annotation_position="top right")
+            if last_qr_ow is not None:
+                fig_ow.add_hline(y=last_qr_ow, line_dash="dot", line_width=2, line_color="#FF6666", annotation_text="Qatar Aktuell", annotation_position="top right")
+
             st.plotly_chart(fig_ow, use_container_width=True)
         else:
             st.info("Warte auf den nächsten automatischen Lauf für die Hinflug-Grafik...")
@@ -59,8 +101,22 @@ if os.path.exists(csv_file):
         df_rt = df.dropna(subset=["HinRück_Günstigster_Markt_clean"])
         if not df_rt.empty:
             fig_rt = px.line(df_rt, x="Zeitpunkt", y=["HinRück_Günstigster_Markt_clean", "HinRück_Emirates_clean", "HinRück_Qatar_clean"],
-                             labels={"value": "Preis in EUR", "Zeitpunkt": "Abfrage-Zeit"},
+                             labels={"value": "Preis in EUR", "Zeitpunkt": "Abfrage-Zeit", "variable": "Airline"},
+                             color_discrete_map=color_map,
                              title="Round-Trip (Rückflug: 13.04.2027)")
+            
+            # Linien etwas dicker machen
+            fig_rt.update_traces(line=dict(width=4))
+            
+            # Mittelgroße Linie rechts
+            last_ek_rt = df_rt["HinRück_Emirates_clean"].dropna().iloc[-1] if not df_rt["HinRück_Emirates_clean"].dropna().empty else None
+            last_qr_rt = df_rt["HinRück_Qatar_clean"].dropna().iloc[-1] if not df_rt["HinRück_Qatar_clean"].dropna().empty else None
+            
+            if last_ek_rt is not None:
+                fig_rt.add_hline(y=last_ek_rt, line_dash="dot", line_width=2, line_color="#D71921", annotation_text="Emirates Aktuell", annotation_position="top right")
+            if last_qr_rt is not None:
+                fig_rt.add_hline(y=last_qr_rt, line_dash="dot", line_width=2, line_color="#FF6666", annotation_text="Qatar Aktuell", annotation_position="top right")
+
             st.plotly_chart(fig_rt, use_container_width=True)
         else:
             st.info("Warte auf den nächsten automatischen Lauf für die Kombi-Grafik...")
