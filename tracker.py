@@ -70,6 +70,7 @@ base_params = {
     "currency": "EUR",
     "hl": "de",
     "gl": "de",
+    "stops": "3",  # 3 steht in SerpApi für "2 Stopps oder weniger"
     "api_key": API_KEY
 }
 
