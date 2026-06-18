@@ -78,24 +78,36 @@ base_params = {
 oneway_params = base_params.copy()
 oneway_params["type"] = "2"
 
+oneway_specific_params = oneway_params.copy()
+oneway_specific_params["airlines"] = "Emirates,Qatar Airways"
+
 # Hin- und Rückflug (Round-Trip)
 roundtrip_params = base_params.copy()
 roundtrip_params["return_date"] = "2027-04-13"
 
-print("Frage One-Way Flugdaten an...")
+roundtrip_specific_params = roundtrip_params.copy()
+roundtrip_specific_params["airlines"] = "Emirates,Qatar Airways"
+
+print("Frage One-Way Markt an...")
 oneway_data = fetch_flights(oneway_params)
 
-print("Frage Round-Trip Flugdaten an...")
+print("Frage One-Way Emirates & Qatar an...")
+oneway_specific_data = fetch_flights(oneway_specific_params)
+
+print("Frage Round-Trip Markt an...")
 roundtrip_data = fetch_flights(roundtrip_params)
+
+print("Frage Round-Trip Emirates & Qatar an...")
+roundtrip_specific_data = fetch_flights(roundtrip_specific_params)
 
 # 3. Günstigste Preise extrahieren (wenigste Stopps -> günstigster Preis)
 oneway_markt = extract_best_price(oneway_data)
-oneway_emirates = extract_best_price(oneway_data, "Emirates")
-oneway_qatar = extract_best_price(oneway_data, "Qatar")
+oneway_emirates = extract_best_price(oneway_specific_data, "Emirates")
+oneway_qatar = extract_best_price(oneway_specific_data, "Qatar")
 
 roundtrip_markt = extract_best_price(roundtrip_data)
-roundtrip_emirates = extract_best_price(roundtrip_data, "Emirates")
-roundtrip_qatar = extract_best_price(roundtrip_data, "Qatar")
+roundtrip_emirates = extract_best_price(roundtrip_specific_data, "Emirates")
+roundtrip_qatar = extract_best_price(roundtrip_specific_data, "Qatar")
 
 # 4. Zeitstempel und Wochentag erstellen
 now = datetime.now()
