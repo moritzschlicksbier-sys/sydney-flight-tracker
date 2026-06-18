@@ -61,10 +61,10 @@ if os.path.exists(csv_file):
     color_map = {
         "Hinflug_Günstigster_Markt_clean": "#00CC00",  # Deutliches Grün
         "Hinflug_Emirates_clean": "#D71921",           # Emirates Rot
-        "Hinflug_Qatar_clean": "#FF6666",              # Helles Rot für Qatar
+        "Hinflug_Qatar_clean": "#87CEFA",              # Hellblau für Qatar
         "HinRück_Günstigster_Markt_clean": "#00CC00",
         "HinRück_Emirates_clean": "#D71921",
-        "HinRück_Qatar_clean": "#FF6666"
+        "HinRück_Qatar_clean": "#87CEFA"
     }
 
     # Spalten aufteilen für zwei nebeneinanderliegende Graphen
@@ -83,15 +83,29 @@ if os.path.exists(csv_file):
             # Linien etwas dicker machen für modernen Look
             fig_ow.update_traces(line=dict(width=4))
             
+            # Platz für die Logos am Rand schaffen
+            fig_ow.update_layout(margin=dict(r=80))
+            
             # Mittelgroße Linie rechts für aktuelle Preise von Emirates und Qatar
             last_ek_ow = df_ow["Hinflug_Emirates_clean"].dropna().iloc[-1] if not df_ow["Hinflug_Emirates_clean"].dropna().empty else None
             last_qr_ow = df_ow["Hinflug_Qatar_clean"].dropna().iloc[-1] if not df_ow["Hinflug_Qatar_clean"].dropna().empty else None
             
             if last_ek_ow is not None:
-                fig_ow.add_hline(y=last_ek_ow, line_dash="dot", line_width=2, line_color="#D71921", annotation_text="Emirates Aktuell", annotation_position="top right")
+                fig_ow.add_layout_image(
+                    source="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Emirates_logo.svg/320px-Emirates_logo.svg.png",
+                    xref="x domain", yref="y",
+                    x=1.05, y=last_ek_ow,
+                    sizex=0.1, sizey=20,
+                    xanchor="center", yanchor="middle"
+                )
             if last_qr_ow is not None:
-                fig_ow.add_hline(y=last_qr_ow, line_dash="dot", line_width=2, line_color="#FF6666", annotation_text="Qatar Aktuell", annotation_position="top right")
-
+                fig_ow.add_layout_image(
+                    source="https://upload.wikimedia.org/wikipedia/en/thumb/2/29/Qatar_Airways_Logo.svg/320px-Qatar_Airways_Logo.svg.png",
+                    xref="x domain", yref="y",
+                    x=1.05, y=last_qr_ow,
+                    sizex=0.1, sizey=20,
+                    xanchor="center", yanchor="middle"
+                )
             st.plotly_chart(fig_ow, use_container_width=True)
         else:
             st.info("Warte auf den nächsten automatischen Lauf für die Hinflug-Grafik...")
@@ -108,15 +122,29 @@ if os.path.exists(csv_file):
             # Linien etwas dicker machen
             fig_rt.update_traces(line=dict(width=4))
             
+            # Platz für die Logos am Rand schaffen
+            fig_rt.update_layout(margin=dict(r=80))
+
             # Mittelgroße Linie rechts
             last_ek_rt = df_rt["HinRück_Emirates_clean"].dropna().iloc[-1] if not df_rt["HinRück_Emirates_clean"].dropna().empty else None
             last_qr_rt = df_rt["HinRück_Qatar_clean"].dropna().iloc[-1] if not df_rt["HinRück_Qatar_clean"].dropna().empty else None
             
             if last_ek_rt is not None:
-                fig_rt.add_hline(y=last_ek_rt, line_dash="dot", line_width=2, line_color="#D71921", annotation_text="Emirates Aktuell", annotation_position="top right")
+                fig_rt.add_layout_image(
+                    source="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Emirates_logo.svg/320px-Emirates_logo.svg.png",
+                    xref="x domain", yref="y",
+                    x=1.05, y=last_ek_rt,
+                    sizex=0.1, sizey=20,
+                    xanchor="center", yanchor="middle"
+                )
             if last_qr_rt is not None:
-                fig_rt.add_hline(y=last_qr_rt, line_dash="dot", line_width=2, line_color="#FF6666", annotation_text="Qatar Aktuell", annotation_position="top right")
-
+                fig_rt.add_layout_image(
+                    source="https://upload.wikimedia.org/wikipedia/en/thumb/2/29/Qatar_Airways_Logo.svg/320px-Qatar_Airways_Logo.svg.png",
+                    xref="x domain", yref="y",
+                    x=1.05, y=last_qr_rt,
+                    sizex=0.1, sizey=20,
+                    xanchor="center", yanchor="middle"
+                )
             st.plotly_chart(fig_rt, use_container_width=True)
         else:
             st.info("Warte auf den nächsten automatischen Lauf für die Kombi-Grafik...")
