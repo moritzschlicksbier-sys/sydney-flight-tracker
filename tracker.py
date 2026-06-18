@@ -75,6 +75,7 @@ base_params = {
 
 # Hinflug (One-Way)
 oneway_params = base_params.copy()
+oneway_params["type"] = "2"
 
 # Hin- und Rückflug (Round-Trip)
 roundtrip_params = base_params.copy()
